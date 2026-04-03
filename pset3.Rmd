@@ -195,7 +195,7 @@ plot(cv_ridge)
 ```
 4.2
 a) Optimal lambda: .0138
-b) As you move from left to right, increasing the penalty, the mean squared error drops. This shows that the original OLS model was overfitting. By shrinking the coefficients, we made the model much more accurate. Also, in Ridge regression, the number of predictors stays constant. Even though we are shrinking them, Ridge never sets a coefficient exactly to zero. This is why 128 is across the top, all variables are still in the model.
+b) As we move from left to right, increasing the penalty, the mean squared error drops. This shows that the original OLS model was overfitting. By shrinking the coefficients, we made the model much more accurate. Also, in Ridge regression, the number of predictors stays constant. Even though we are shrinking them, Ridge never sets a coefficient exactly to zero. This is why 128 is across the top, all variables are still in the model.
 
 ```{r 4.2}
 y_hat_ridge <- predict(cv_ridge, newx = X_test, s = "lambda.min")
@@ -216,4 +216,50 @@ length(ridge_coefs)
 ```
 4.3
 No ridge regression did not perform any active feature selection. While the output shows 13 coefficients as zero, these were dropped due to linear redundancy in the Kitchen Sink data. Ridge uses an L2 penalty, which squares the coefficients in the optimization function. This approach shrinks coefficients toward zero to reduce variance, but it never forces them to be exactly zero. Ridge performs shrinkage but not feature selection, keeping all 129 valid predictors in the model.
+
+```{r 5.1}
+set.seed(51)
+cv_lasso <- cv.glmnet(X_train, y_train, alpha = 1)
+best_lambda_lasso <- cv_lasso$lambda.min
+print(paste("Optimal LASSO Lambda:", round(best_lambda_lasso, 4)))
+
+plot(cv_lasso)
+```
+
+5.1
+a)0.0077
+b)The plot shows how the mean squared error changes as the penalty increases. The numbers across the top of this graph decrease from right to left, showing that LASSO is actively selecting variables by setting their coefficients to exactly zero.
+
+```{r 5.2}
+lasso_coefs <- as.matrix(coef(cv_lasso, s = "lambda.min"))
+survived <- sum(lasso_coefs != 0) - 1  # -1 to exclude the Intercept
+eliminated <- sum(lasso_coefs == 0)
+
+print(paste("Variables that survived:", survived))
+print(paste("Variables eliminated:", eliminated))
+head(lasso_coefs[lasso_coefs != 0 & grepl(":", rownames(lasso_coefs)), , drop=FALSE], 10)
+```
+5.2
+a) Out of the original ~141 variables, 27 survived with non-zero coefficients. LASSO eliminated 114 variables.
+b) A few surviving interaction terms include female:age_under_25 and black:age_under_25.Yes, these make sense. They suggest that the baselinen effect of race or gender on recidivism is not the same for everyone, it might be different specifically for younger individuals. By keeping these, the model is acknowledging that the relationship between these demographics and the outcome is more complex than what our simple OLS model assumed.
+c) What we see here illustrates his point the computer, not the researcher, made the choice. Instead of me guessing whether female:priors_count was important, the LASSO algorithm used a strict mathematical penalty to decide. This removes the researcher's subjective discretion and replaces it with a transparent, data driven rule for which variables belong in the final report.
+
+```{r 5.3}
+y_hat_lasso <- predict(cv_lasso, newx = X_test, s = "lambda.min")
+rmse_lasso <- sqrt(mean((y_hat_lasso - y_test)^2))
+results <- data.frame(
+  Model = c("Simple OLS (16 vars)", "Kitchen-Sink OLS (141 vars)", "Ridge (Shrinkage)", "LASSO (Selection)"),
+  RMSE = c(0.4622, 0.4890, 0.4700, round(rmse_lasso, 4))
+)
+
+print(results)
+```
+5.3
+Compared to - 
+OLS (0.4622): LASSO performed the best. It proved that there was useful information in those extra 141 variables (like the interactions between age and race), but you needed to filter out the garbage to see the benefit.
+
+Kitchen sink OLS (0.4890): LASSO massively improved the model. It reduced the error by over 6%, showing that more data is only better if you have a way to handle the overfitting.
+
+Ridge (0.4700): LASSO performed better than Ridge. In this specific recidivism dataset, it was more effective to completely zero out the weak predictors than to just shrink all of them. This suggests that a few key interactions matter a lot, while most of the others are truly useless.
+
 
