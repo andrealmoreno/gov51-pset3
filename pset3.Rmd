@@ -74,4 +74,74 @@ compas_priors |>
 1.5
 There is a strong positive relationship between the number of prior offenses and the recidivism rate. As the number of priors increases, the proportion of people who are rearrested within two years goes up steadily—from about 30% for those with zero priors to over 70% for those with 11 or more.
 
+```{r 2.1-split-data}
+
+set.seed(51)
+
+n <- nrow(compas)
+
+train_idx <- sample(1:n, size = floor(0.8 * n))
+
+train <- compas[train_idx, ]
+test <- compas[-train_idx, ]
+
+nrow(train)
+nrow(test)
+```
+
+2.1 
+There are 5,771 observations in the training set and 1,443 observations in the test set.
+```{r 2.2-ols-model}
+ols_model <- lm(recidivism ~ ., data = train)
+
+summary(ols_model)
+
+```
+2.2 
+a) The predictors that are statistically significant at the 5% level are: age, female, priors_count, felony, has_juv_misd, age_25_45.
+b) For every additional prior offense a person has, their predicted probability of recidivism increases by approximately 3 percentage points, holding all other variables constant.
+
+```{r 2.3-rmse-calc}
+#in sample
+y_hat_train <- predict(ols_model, newdata = train)
+rmse_in <- sqrt(mean((y_hat_train - train$recidivism)^2))
+
+#out of sample
+y_hat_test <- predict(ols_model, newdata = test)
+rmse_out <- sqrt(mean((y_hat_test - test$recidivism)^2))
+
+print(paste("In-sample RMSE:", round(rmse_in, 4)))
+print(paste("Out-of-sample RMSE:", round(rmse_out, 4)))
+```
+2.3
+a) In sample: .4606
+b) Out of sample: .4622
+c)The gap between the in-sample and out-of-sample RMSE is extremely small (0.0016). This tells us that OLS is not overfitting.
+
+```{r 2.4}
+
+set.seed(51)
+folds <- sample(rep(1:5, length.out = nrow(train)))
+rmse_cv <- numeric(5)
+
+for (k in 1:5) {
+  
+  train_k <- train[folds != k, ]
+  test_k  <- train[folds == k, ]
+  
+  model_k <- lm(recidivism ~ ., data = train_k)
+ 
+  pred_k  <- predict(model_k, newdata = test_k)
+  
+  rmse_cv[k] <- sqrt(mean((test_k$recidivism - pred_k)^2))
+}
+
+mean(rmse_cv)
+
+```
+2.4
+a) The 5-fold CV estimate of RMSE is 0.4620. This is nearly identical to my single-split out-of-sample RMSE of 0.4622. Because these numbers are so close, we can be very confident that our error estimate is accurate and not just a lucky result from one specific split.
+b) Cross-validation is more reliable because it prevents us from getting lucky or unlucky with a single random split. By splitting the data five different times and averaging the results, we ensure that our error estimate isn't being driven by a few weird outliers that happened to land in the test set. It gives us a more stable and honest look at how the model performs on average.
+c) Cross-validation is the right tool for choosing lambda because it allows us to test different levels of model complexity. Since lambda controls how much the model penalizes extra variables, CV helps us find the exact spot where the model is complex enough to predict well but simple enough that it doesn't overfit to noise.
+
 
