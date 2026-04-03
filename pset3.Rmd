@@ -185,5 +185,35 @@ c) The gap has grown significantly compared to the simple model where the gap wa
 3.3 
 This phenomenon is called overfitting.By adding so many interaction terms, the model was able to memorize the specific noise and random coincidences in the training data, which made the in sample fit appear better. However, because those random patterns do not exist in the test data, the model’s out of sample predictions got worse as it tried to apply fake rules to new people.
 
+```{r 4.1}
+library(glmnet)
+set.seed(51)
+cv_ridge <- cv.glmnet(X_train, y_train, alpha = 0)
+best_lambda_ridge <- cv_ridge$lambda.min
+print(paste("Optimal Ridge Lambda:", round(best_lambda_ridge, 4)))
+plot(cv_ridge)
+```
+4.2
+a) Optimal lambda: .0138
+b) As you move from left to right, increasing the penalty, the mean squared error drops. This shows that the original OLS model was overfitting. By shrinking the coefficients, we made the model much more accurate. Also, in Ridge regression, the number of predictors stays constant. Even though we are shrinking them, Ridge never sets a coefficient exactly to zero. This is why 128 is across the top, all variables are still in the model.
 
+```{r 4.2}
+y_hat_ridge <- predict(cv_ridge, newx = X_test, s = "lambda.min")
+
+rmse_ridge <- sqrt(mean((y_hat_ridge - y_test)^2))
+
+print(paste("Simple OLS RMSE (16 vars):", 0.4622))
+print(paste("Kitchen-Sink OLS RMSE (141 vars):", 0.4890))
+print(paste("Ridge RMSE (141 vars + Penalty):", round(rmse_ridge, 4)))
+```
+4.2 
+The Ridge RMSE (0.4700) is an improvement over the Kitchen-Sink OLS (0.4890), but it still performs worse than the original Simple OLS (0.4622). Ridge added a penalty that tamed the 141 variables, which prevented the overfitting from earlier. This is why the error dropped from 0.489 to 0.470. Even with the Ridge penalty, the 141 interaction and squared terms might be introducing more noise than signal. Because ridge keeps all 141 variables in the model it never sets them to zero, it is still carrying around a lot of dead weight that hurts its ability to predict as accurately as the simple model.
+
+```{r 4.3}
+ridge_coefs <- coef(cv_ridge, s = "lambda.min")
+sum(ridge_coefs == 0)
+length(ridge_coefs)
+```
+4.3
+No ridge regression did not perform any active feature selection. While the output shows 13 coefficients as zero, these were dropped due to linear redundancy in the Kitchen Sink data. Ridge uses an L2 penalty, which squares the coefficients in the optimization function. This approach shrinks coefficients toward zero to reduce variance, but it never forces them to be exactly zero. Ridge performs shrinkage but not feature selection, keeping all 129 valid predictors in the model.
 
