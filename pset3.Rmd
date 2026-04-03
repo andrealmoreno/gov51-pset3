@@ -144,4 +144,46 @@ a) The 5-fold CV estimate of RMSE is 0.4620. This is nearly identical to my sing
 b) Cross-validation is more reliable because it prevents us from getting lucky or unlucky with a single random split. By splitting the data five different times and averaging the results, we ensure that our error estimate isn't being driven by a few weird outliers that happened to land in the test set. It gives us a more stable and honest look at how the model performs on average.
 c) Cross-validation is the right tool for choosing lambda because it allows us to test different levels of model complexity. Since lambda controls how much the model penalizes extra variables, CV helps us find the exact spot where the model is complex enough to predict well but simple enough that it doesn't overfit to noise.
 
+```{r 3.1}
+
+f_full <- recidivism ~ (.)^2 + 
+  I(age^2) + I(priors_count^2) + 
+  I(juv_fel_count^2) + I(juv_misd_count^2) + 
+  I(juv_other_count^2)
+
+X_train <- model.matrix(f_full, data = train)[, -1]
+X_test  <- model.matrix(f_full, data = test)[, -1]
+
+y_train <- train$recidivism
+y_test  <- test$recidivism
+
+ncol(X_train)
+
+nrow(train) / ncol(X_train)
+```
+3.1
+a) The expanded model has 141 predictors.
+b) The ratio of training observations to predictors is now approximately 41-to-1 (5,771 / 141). In our first model, we had about 360 rows of data for every 1 variable we tried to estimate. Now, we only have about 41 rows for every 1 variable.
+
+```{r 3.2}
+
+ols_full <- lm(f_full, data = train)
+
+y_hat_train_full <- predict(ols_full, newdata = train)
+rmse_in_full <- sqrt(mean((y_hat_train_full - train$recidivism)^2))
+y_hat_test_full <- predict(ols_full, newdata = test)
+rmse_out_full <- sqrt(mean((y_hat_test_full - test$recidivism)^2))
+
+print(paste("Full Model In-sample RMSE:", round(rmse_in_full, 4)))
+print(paste("Full Model Out-of-sample RMSE:", round(rmse_out_full, 4)))
+```
+3.2 
+a) in sample RMSE: 0.4485
+b) out of sample: 0.489
+c) The gap has grown significantly compared to the simple model where the gap was only 0.0016.The In sample RMSE dropped (from 0.4606 to 0.4485) because the model used those 141 predictors to memorize the specific noise and random quirks of the training data. The out of sample RMSE increased (from 0.4622 to 0.4890) because the noise it memorized in the training set doesn't exist in the test set, the model's predictions actually got worse for new people.
+
+3.3 
+This phenomenon is called overfitting.By adding so many interaction terms, the model was able to memorize the specific noise and random coincidences in the training data, which made the in sample fit appear better. However, because those random patterns do not exist in the test data, the model’s out of sample predictions got worse as it tried to apply fake rules to new people.
+
+
 
