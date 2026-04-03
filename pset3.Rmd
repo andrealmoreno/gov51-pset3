@@ -262,4 +262,75 @@ Kitchen sink OLS (0.4890): LASSO massively improved the model. It reduced the er
 
 Ridge (0.4700): LASSO performed better than Ridge. In this specific recidivism dataset, it was more effective to completely zero out the weak predictors than to just shrink all of them. This suggests that a few key interactions matter a lot, while most of the others are truly useless.
 
+```{r 6.1}
+set.seed(51)
+cv_enet <- cv.glmnet(X_train, y_train, alpha = 0.5)
+
+y_hat_enet <- predict(cv_enet, newx = X_test, s = "lambda.min")
+rmse_enet <- sqrt(mean((y_hat_enet - y_test)^2))
+enet_coefs <- as.matrix(coef(cv_enet, s = "lambda.min"))
+retained_enet <- sum(enet_coefs != 0) - 1 # Exclude intercept
+
+print(paste("Elastic Net RMSE:", round(rmse_enet, 4)))
+print(paste("Variables Retained:", retained_enet))
+```
+6.1 
+Out of sample RMSE:  0.4583
+Variables Retained: 43
+
+```{r 6.2}
+library(knitr)
+comparison_df <- data.frame(
+  Model = c("OLS (main effects)", 
+            "OLS (kitchen sink)", 
+            "Ridge", 
+            "LASSO", 
+            "Elastic Net"),
+  Predictors = c(16, 141, 128, 27, 43),
+  `Out-of-Sample RMSE` = c(0.4622, 0.4890, 0.4700, 0.4593, 0.4583)
+)
+
+
+kable(comparison_df, 
+      digits = 4,
+      align = "lcc")
+```
+
+6.2
+a) The Elastic Net model has the lowest out-of-sample RMSE (0.4583).
+b) The Kitchen-Sink OLS has the best in-sample fit. It is not the same model, its high performance in-sample was actually a sign of overfitting, which is why it performed the worst out-of-sample.
+c) This table shows that simply adding more variables (moving from 16 to 141) increases variance so much that the model's predictive power collapses. Regularization techniques like LASSO and elastic net intentionally introduce a little bit of bias by shrinking coefficients, but in return, they significantly reduce variance. This tradeoff allows them to achieve a much lower RMSE than the standard OLS models.
+
+6.3
+a) LASSO helped narrow the disagreement by removing subjective discretion from the model-building process. In the Halliburton case, experts could cherry pick specific peer firms to include in their OLS models to tip the results in their favor. By using LASSO, the algorithm determines which variables or peer firms are statistically relevant based on a strict, mathematical penalty. This creates a transparent rule that prevents both sides from manually selecting only the data that supports their desired conclusion.
+b) Based on this problem set, the manual selection of interaction terms and control variables gives the analyst the most room for manipulation. In the Kitchen Sink model, we saw how easily 141 variables can be created. In a traditional OLS approach, an analyst could trial-and-error hundreds of combinations of these interactions and only report the one that produces a significant p-value or a specific coefficient. Unlike LASSO, which forces a penalty on every extra variable, traditional OLS allows a researcher to hide the noise and present a hand-picked model as if it were the only one they tested.
+
+6.4
+a)No, it would not. The LASSO coefficient is biased by design. Because LASSO uses a penalty to shrink coefficients toward zero to improve prediction, the resulting number is not an unbiased estimate of the true effect of prior offenses. Furthermore, LASSO might mute other variables that are technically related to priors_count (confounders), which would normally be required to isolate a causal effect. LASSO cares about accuracy, not honesty regarding the underlying mechanism.
+b) The goal in using regression for prediction is to minimize the distance between our guess and the actual outcome. Any variable can help predict recidivism, a predictive model would use it. It is focused on correlation and out-of-sample performance. The goal in using it for casual inference is to isolate the effect of a specific treatment while holding everything else constant. This requires a strict theoretical model to account for all confounding factors. A causal model might have a worse RMSE than a LASSO model, but it provides a more reliable answer to If we change X, will Y change?
+
+
+```{r 6.5}
+is_white <- test$black == 0 & test$hispanic == 0 & 
+            test$asian == 0 & test$other_race == 0 & 
+            test$native_american == 0
+
+is_black <- test$black == 1
+y_hat_simple <- predict(ols_model, newdata = test)
+mean_pred_white <- mean(y_hat_simple[is_white], na.rm = TRUE)
+mean_pred_black <- mean(y_hat_simple[is_black], na.rm = TRUE)
+mean_actual_white <- mean(test$recidivism[is_white], na.rm = TRUE)
+mean_actual_black <- mean(test$recidivism[is_black], na.rm = TRUE)
+
+results_fairness <- data.frame(
+  Group = c("White", "Black"),
+  `Predicted Rate` = c(mean_pred_white, mean_pred_black),
+  `Actual Rate` = c(mean_actual_white, mean_actual_black)
+)
+print(results_fairness)
+```
+6.5
+a) The mean predicted recidivism probability for Black defendants is 0.512, while for white defendants it is 0.379. There is a difference of roughly 13 percentage points in how the model assesses risk based on race.
+b) The actual recidivism rate for Black defendants is 0.521 and for white defendants is 0.402. The model’s predictions are remarkably close to the actual rates in the test set, meaning the model is accurately capturing the disparities present in the data
+c) A tradeoff in using algorithms like COMPAS is between predictive accuracy and systemic equity. While the model is accurate in that its predictions match the actual rates, it relies on variables like priors_count which often reflect historical over-policing of black communities. By using these statistically significant predictors to lower RMSE, the algorithm risks automating and validating racial disparities in the justice system rather than offering a neutral assessment of individual risk.
 
